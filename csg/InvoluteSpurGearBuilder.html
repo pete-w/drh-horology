@@ -111,6 +111,8 @@
 					otherToothLength: params.wheel2ToothLength,
 					centerHoleDiameter: params.wheel1CenterHoleDiamater,
 					cutoutHoleCount: params.wheel1CutoutHoleCount,
+					cutoutHoleSize: params.wheel1CutoutHoleSize,
+					cutoutHoleLocation: params.wheel1CutoutHoleLocation,
 					webThickness: params.wheel1WebThickness,
 					qualitySettings: qualitySettings
 				});
@@ -125,6 +127,8 @@
 					otherToothLength: params.wheel1ToothLength,
 					centerHoleDiameter: params.wheel2CenterHoleDiamater,
 					cutoutHoleCount: params.wheel2CutoutHoleCount,
+					cutoutHoleSize: params.wheel2CutoutHoleSize,
+					cutoutHoleLocation: params.wheel2CutoutHoleLocation,
 					webThickness: params.wheel2WebThickness,
 					qualitySettings: qualitySettings
 				});
@@ -147,14 +151,18 @@
 					{ name: 'clearance', caption: 'Clearance (minimal distance between the apex of a tooth and the trough of the other gear; in length units):', type: 'float', initial: 0.05 },
 					{ name: 'backlash', caption: 'Backlash (minimal distance between meshing gears; in length units):', type: 'float', initial: 0.05 },
 					{ name: 'wheel1ToothCount', caption: 'Wheel 1 Tooth Count (n1 > 0: external gear; n1 = 0: rack; n1 < 0: internal gear):', type: 'int', initial: 30 },
-					{ name: 'wheel1ToothLength', caption: 'Wheel 1 Tooth Length (compared to the standard addendum length E.g., a value of 0.8 would be typical stub teeth to avoid undercutting the other wheel. E.g., to obtain a profile shift set the other wheel so that they average 1):', type: 'float', initial: 0.8 },
+					{ name: 'wheel1ToothLength', caption: 'Wheel 1 Tooth Length (compared to the standard addendum length E.g., a value of 0.8 would be typical stub teeth to avoid undercutting the other wheel. E.g., to obtain a profile shift set the other wheel so that they average 1):', type: 'float', initial: 1 },
 					{ name: 'wheel1CenterHoleDiamater', caption: 'Wheel 1 Center Hole Diameter (0 for no hole):', type: 'float', initial: 4 },
-					{ name: 'wheel1CutoutHoleCount', caption: 'Wheel 1 Cutout Hole Count (0 for no cutouts):', type: 'int', initial: 4 },
+					{ name: 'wheel1CutoutHoleCount', caption: 'Wheel 1 Cutout Hole Count (0 for no holes):', type: 'int', initial: 4 },
+					{ name: 'wheel1CutoutHoleSize', caption: 'Wheel 1 Cutout Hole Size (size of the cutout compared to its maximum):', type: 'float', initial: 1 },
+					{ name: 'wheel1CutoutHoleLocation', caption: 'Wheel 1 Cutout Hole Location (1 being as close to the rim as possible, 0 being close to the center):', type: 'float', initial: 1 },
 					{ name: 'wheel1WebThickness', caption: 'Wheel 1 Web Thickness (minimum distance between cutouts compared to the tooth width):', type: 'float', initial: 1 },
 					{ name: 'wheel2ToothCount', caption: 'Wheel 2 Tooth Count:', type: 'int', initial: 8 },
 					{ name: 'wheel2ToothLength', caption: 'Wheel 2 Tooth Length:', type: 'float', initial: 1 },
 					{ name: 'wheel2CenterHoleDiamater', caption: 'Wheel 2 Center Hole Diameter:', type: 'float', initial: 4 },
 					{ name: 'wheel2CutoutHoleCount', caption: 'Wheel 2 Cutout Hole Count:', type: 'int', initial: 0 },
+					{ name: 'wheel2CutoutHoleSize', caption: 'Wheel 2 Cutout Hole Size:', type: 'float', initial: 1 },
+					{ name: 'wheel2CutoutHoleLocation', caption: 'Wheel 2 Cutout Hole Location:', type: 'float', initial: 1 },
 					{ name: 'wheel2WebThickness', caption: 'Wheel 2 Web Thickness:', type: 'float', initial: 1 },
 					{ name: 'showOption', caption: 'Show:', type: 'choice', values: [3, 1, 2], initial: 3, captions: ['Wheel 1 and Wheel 2', 'Wheel 1 Only', 'Wheel 2 Only']},
 					{ name: 'stepsPerToothAngle', caption: 'Rotation steps per tooth angle when assembling the tooth profile (3 = draft, 10 = good quality). Increasing the value will result in smoother profiles at the cost of significantly higher calcucation time. Incease in small increments and check the result by zooming in.', type: 'int', initial: 3 },
@@ -172,6 +180,7 @@
 
 			// Start base class Gear
 			var Gear = (function () {
+			
 				function Gear(options) {
 					var options = options || {};
 
@@ -193,15 +202,15 @@
 					// the pressure angle provides lower backlash, smoother operation and less sensitivity to manufacturing errors. (reference: http://en.wikipedia.org/wiki/Involute_gear)
 
 					// Given the measurement basis we calculate the diametral pitch
-					if (options.measurementType == 'circularPitch') { // Distance from one face of a tooth to the corresponding face of an adjacent tooth on the same gear, measured along the pitch circle.
+					if (options.measurementType == 'circularPitch' && options.measurement) { // Distance from one face of a tooth to the corresponding face of an adjacent tooth on the same gear, measured along the pitch circle
 						// convert circular pitch to diametral pitch
-						this.diametralPitch = Math.PI / (options.measurement || 8);
+						this.diametralPitch = Math.PI / options.measurement;
 					}
-					else if (options.measurementType == 'diametralPitch') { // Ratio of the number of teeth to the pitch diameter
-						this.diametralPitch = options.measurement || 0.4;
+					else if (options.measurementType == 'diametralPitch'  && options.measurement) { // Ratio of the number of teeth to the pitch diameter
+						this.diametralPitch = options.measurement;
 					}
 					else {
-						throw "gear module needs either a diametralPitch or circularPitch"; // TODO Must have a measurement
+						throw "gear needs either a diametralPitch or circularPitch measurementType and a measurement value";
 					}
 					//OpenJsCad.log("diametralPitch: " + this.diametralPitch);
 					
@@ -216,25 +225,29 @@
 					OpenJsCad.log("pitchDiameter: " + this.pitchRadius * 2);
 
 					// Addendum: Radial distance from pitch circle to outside circle.
-					this.addendum = 1 / this.diametralPitch * (options.toothLength || 1);
+					this.addendum = 1 / this.diametralPitch * (options.toothLength == null ? 1 : options.toothLength); // Zero tooth length is a wheel
 					this.outerRadius = this.pitchRadius + this.addendum;
 					OpenJsCad.log("outerDiameter: " + this.outerRadius * 2);
 					
 					// Dedendum: Radial distance from pitch circle to root circle.
-					this.dedendum = 1 / this.diametralPitch * (options.otherToothLength || 1) + this.clearance;
+					this.dedendum = 1 / this.diametralPitch * (options.otherToothLength == null ? 1 : options.otherToothLength) + this.clearance; // Zero tooth length is a wheel
 					this.rootRadius = this.pitchRadius - this.dedendum;
 					OpenJsCad.log("rootDiameter: " + this.rootRadius * 2);
 					
 					this.centerHoleDiameter = options.centerHoleDiameter || 0;
-					this.cutoutHoleCount = options.cutoutHoleCount || 0,
-					this.webThickness = Math.PI / this.diametralPitch / 2 * (options.webThickness || 1),
-					OpenJsCad.log("webThickness: " + this.webThickness);
-										
+					this.cutoutHoleCount = options.cutoutHoleCount || 0;
+					if (this.cutoutHoleCount > 1) {
+						this.cutoutHoleSize = options.cutoutHoleSize || 1;				
+						this.cutoutHoleLocation = options.cutoutHoleLocation == null ? 1 : options.cutoutHoleLocation; // Zero cutout hole location is as close to the center as possible whilst maintaining web thickness
+						this.webThickness = Math.PI / this.diametralPitch / 2 * (options.webThickness || 1);
+						OpenJsCad.log("webThickness: " + this.webThickness);
+					}
 					this.angleToothToTooth = 360 / this.toothCount;
 					this.qualitySettings = options.qualitySettings;
 					//OpenJsCad.log("qualitySettings.resolution: " + this.qualitySettings.resolution);
 					//OpenJsCad.log("qualitySettings.stepsPerToothAngle: " + this.qualitySettings.stepsPerToothAngle);
 				}
+				
 				Gear.prototype.getZeroedShape = function() {
 					// return the gear shape center on the origin and rotation angle 0.
 					if (this.zeroedShape == null) {
@@ -242,6 +255,7 @@
 					}
 					return this.zeroedShape;
 				}
+				
 				Gear.prototype._createZeroedShape = function() {
 					if (this.gearType == GearType.Regular) {
 						return this._createRegularGearShape();
@@ -253,6 +267,7 @@
 						return this._createRackShape();
 					}
 				}
+				
 				Gear.prototype._createRegularGearShape = function() {
 					var tooth = this._createSingleTooth();
 					//OpenJsCad.log("-1");
@@ -291,14 +306,18 @@
 						}
 						//OpenJsCad.log(i);
 					}
-
+					
+					return this._addRegularGearCutouts(outerPoints).rotateZ(-90);
+				}
+				
+				Gear.prototype._addRegularGearCutouts = function(outerPoints) {
 					var gearShape = CAG.fromPointsNoCheck(outerPoints);
-
+				
 					if (this.centerHoleDiameter > 0) {
 						var centerhole = CAG.circle({center: [0, 0], radius: this.centerHoleDiameter / 2, resolution: this.qualitySettings.resolution});
 						gearShape = gearShape.subtract(centerhole);
 					}
-					
+
 					if (this.cutoutHoleCount > 1) {
 						var size;
 						if (this.cutoutHoleCount == 2) {
@@ -310,18 +329,18 @@
 						}
 						//OpenJsCad.log("size: " + size);
 
-						var cutoutRadius = (this.rootRadius - this.webThickness / 2) * size - this.webThickness / 2;
+						var cutoutRadius = ((this.rootRadius - this.webThickness / 2) * size - this.webThickness / 2) * this.cutoutHoleSize;
 						//OpenJsCad.log("armLimitRadius: " + cutoutRadius);
 						
 						if (this.centerHoleDiameter > 0) {
-							var centreHoleLimitRadius = (this.rootRadius - this.centerHoleDiameter / 2) / 2 - this.webThickness;
-							//OpenJsCad.log("centreHoleLimitRadius: " + centreHoleLimitRadius);
-							cutoutRadius = Math.min(cutoutRadius, centreHoleLimitRadius);
+							var centerHoleLimitRadius = (this.rootRadius - this.centerHoleDiameter / 2) / 2 - this.webThickness;
+							//OpenJsCad.log("centerHoleLimitRadius: " + centerHoleLimitRadius);
+							cutoutRadius = Math.min(cutoutRadius, centerHoleLimitRadius);
 						}
 						OpenJsCad.log("cutoutDiameter: " + cutoutRadius * 2);
 
 						if (cutoutRadius > 0) {
-							var cutoutCenter = this.rootRadius - cutoutRadius - this.webThickness;
+							var cutoutCenter = this.rootRadius + cutoutRadius * (this.cutoutHoleLocation - 2) - this.webThickness; // TODO Fix for small cutouts
 							OpenJsCad.log("cutoutCenter: " + cutoutCenter);
 						
 							for (var i = 0; i < this.cutoutHoleCount; i++) {
@@ -330,9 +349,9 @@
 							}
 						}
 					}
-
-					return gearShape.rotateZ(-90);
+					return gearShape;
 				}
+				
 				Gear.prototype._createSingleTooth = function() {
 					// create outer circle sector covering one tooth
 					var toothSectorPath = new CSG.Path2D([[0,0]], /* closed = */ false);
@@ -347,38 +366,14 @@
 					toothSectorPath = toothSectorPath.close();
 					var toothSector = toothSectorPath.innerToCAG();
 
+					if (this.dedendum > 0) {
 					var toothCutout = this.createToothCutout(false);
-					//OpenJsCad.log("-2");
-					var tooth = toothSector.subtract(toothCutout);
-					return tooth;
+						//OpenJsCad.log("-2");
+						toothSector = toothSector.subtract(toothCutout);
+					}
+					return toothSector;
 				}
-				Gear.prototype.createCutoutDemo = function() {
-					// create outer circle
-					var outerCirclePath = CSG.Path2D.arc({
-						center: [0, 0],
-						radius: this.outerRadius,
-						startangle: 0,
-						endangle: 360,
-						resolution: this.qualitySettings.resolution,
-					});
-					outerCirclePath = outerCirclePath.close();
 
-					var gearShape = new CAG();
-					gearShape = gearShape.union(outerCirclePath.expandToCAG(g_ExpandToCAGParams.pathradius, g_ExpandToCAGParams.resolution));
-					
-					var firstCutoutHalf = this.createHalfToothCutout(true);
-					// for illustration purposes we mirror the cutout and rotate it so that we can see a completely formed tooth 
-					var secondCutoutHalf = firstCutoutHalf.mirroredX();
-
-					gearShape = gearShape.union(firstCutoutHalf);
-					gearShape = gearShape.union(secondCutoutHalf);
-					
-					// apply gear rotation
-					gearShape = gearShape.rotateZ(this.angle)
-					// move to correct center
-					gearShape = gearShape.translate(this.center);
-					return gearShape;
-				}
 				Gear.prototype.createToothCutout = function(asPath) {
 					var angleStepSize = this.angleToothToTooth / this.qualitySettings.stepsPerToothAngle;
 					//OpenJsCad.log("angleToothToTooth: " + this.angleToothToTooth);
@@ -433,26 +428,24 @@
 					var toothCutout = CAG.fromPoints(points);
 					return toothCutout.rotateZ(-this.angleToothToTooth / 2);
 				}
+				
 				Gear.prototype.createToothCutter = function(asPath) {
 					// we create a trapezoidal cutter as described at http://lcamtuf.coredump.cx/gcnc/ch6/ under the section 'Putting it all together'
 					var toothWidth = Math.PI / this.diametralPitch / 2;
 					OpenJsCad.log("toothWidth: " + toothWidth);
 					OpenJsCad.log("toothLength: " + (this.addendum + this.dedendum));
 					
-					var cutterOutsideLength = 3 * this.dedendum;
-					//OpenJsCad.log("cutterOutsideLength: " + cutterOutsideLength);
-					
 					var sinPressureAngle = Math.sin(this.pressureAngle * Math.PI / 180);
 					var cosPressureAngle = Math.cos(this.pressureAngle * Math.PI / 180);
 
 					// if a positive backlash is defined then we widen the trapezoid accordingly.
-					// Each side of the tooth needs to widened by a fourth of the backlash (vertical to cutter faces).
+					// Each side of the tooth needs to widened by half of the backlash (vertical to cutter faces).
 					var dx = this.backlash / 2 / cosPressureAngle;
 					//OpenJsCad.log("backlash: " + this.backlash);
 					//OpenJsCad.log("dx: " + dx);
 					
 					var lowerRightCorner = [toothWidth / 2 + dx - this.dedendum * sinPressureAngle, this.pitchRadius - this.dedendum];
-					var upperRightCorner = [toothWidth / 2 + dx  + cutterOutsideLength * sinPressureAngle, this.pitchRadius + cutterOutsideLength];
+					var upperRightCorner = [toothWidth / 2 + dx  + this.addendum * sinPressureAngle, this.pitchRadius + this.addendum];
 					var upperLeftCorner = [-upperRightCorner[0], upperRightCorner[1]];
 					var lowerLeftCorner = [-lowerRightCorner[0], lowerRightCorner[1]];
 					
@@ -475,6 +468,7 @@
 						lowerLeftCorner: cutterPath.points[0] 
 					}
 				}
+				
 				Gear.prototype._createInternalGearShape = function() {
 					var singleTooth = this._createInternalToothProfile();
 					//return singleTooth;
@@ -525,6 +519,7 @@
 					//return gearCutout;
 					return outerCircle.subtract(gearCutout);
 				}
+				
 				Gear.prototype._createInternalToothProfile = function() {
 					var radius = this.pitchRadius + ( 1 - this.profileShift) * this.addendum + this.clearance;
 					var angleToothToTooth = 360 / this.toothCount;
@@ -580,14 +575,17 @@
 					
 					return toothShape;
 				}
+				
 				Gear.prototype._smoothConvexCorners = function(corners) {
 					// removes single convex corners located between concave corners
 					return this._smoothCorners(corners, /* removeSingleConvex= */ true);
 				}
+				
 				Gear.prototype._smoothConcaveCorners = function(corners) {
 					// removes single concave corners located between convex corners
 					return this._smoothCorners(corners, /* removeSingleConvex= */ false);
 				}
+				
 				Gear.prototype._smoothCorners = function(corners, removeSingleConvex) {
 					var isConvex = [];
 					var previousCorner = corners[corners.length - 1];
@@ -631,6 +629,7 @@
 					
 					return cleanedUpCorners;
 				}
+				
 				Gear.prototype._createInternalToothCutter = function() {
 					// To cut the internal gear teeth, the actual pinion comes close but we need to enlarge it so properly cater for clearance and backlash
 					var pinion = this.connectedGear;
@@ -649,6 +648,7 @@
 					var tooth = enlargedPinion._createSingleTooth();
 					return tooth.rotateZ(90 + 180 / enlargedPinion.toothCount); // we need a tooth pointing to the left
 				}
+				
 				Gear.prototype._createRackShape = function() {
 					var rack = new CAG();
 					var protoTooth = this._createRackTooth();
@@ -670,6 +670,7 @@
 					rack = rack.translate([this.addendum * this.profileShift, 0]);
 					return rack;
 				}
+				
 				Gear.prototype._createRackTooth = function() {
 					var toothWidth = this.circularPitch / 2;
 					var toothDepth = this.addendum + this.clearance;
@@ -691,6 +692,7 @@
 					
 					return CAG.fromPoints([upperLeftCorner, upperRightCorner, lowerRightCorner, lowerLeftCorner]);
 				}
+				
 				Gear.prototype.pointsToString = function(points) {
 					var result = "[";
 					points.map(function(point) {
@@ -703,6 +705,7 @@
 
 			// GearSet class
 			var GearSet = (function () {
+			
 				function GearSet(gear1, gear2, showOption) {
 					this.gear1 = gear1;
 					gear1.connectedGear = gear2;
@@ -718,12 +721,12 @@
 
 					this.showOption = showOption;
 				}
+				
 				GearSet.prototype.createShape = function() {
 					var shape = new CAG();
 					if ((this.showOption & 1) > 0) {
 						// show gear 1
 						var gear1Shape = this.gear1.getZeroedShape();
-						//var gear1Shape = this.gear1.createCutoutDemo();
 						shape = shape.union(gear1Shape);
 					}
 					if ((this.showOption & 2) > 0) {
@@ -749,8 +752,6 @@
 
 						// move to correct center
 						gear2Shape = gear2Shape.translate([this.gearsDistance, 0]);
-
-						//var gear2Shape = this.gear2.createCutoutDemo();
 						shape = shape.union(gear2Shape);
 					}
 					return shape;
