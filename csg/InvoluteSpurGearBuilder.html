@@ -319,13 +319,13 @@
 					}
 
 					if (this.cutoutHoleCount > 1) {
+						var sin = Math.sin(Math.PI / this.cutoutHoleCount);
 						var size;
 						if (this.cutoutHoleCount == 2) {
 							size = 0.5; // Avoid divide by zero below
 						} else {
-							var sin = Math.sin(Math.PI / this.cutoutHoleCount) - 1;
-							var cos = Math.cos(2 * Math.PI / this.cutoutHoleCount) + 1;
-							size = sin * 2 / cos + 1;
+							var cos = Math.cos(2 * Math.PI / this.cutoutHoleCount);
+							size = (sin - 1) * 2 / (cos + 1) + 1;
 						}
 						//OpenJsCad.log("size: " + size);
 
@@ -333,14 +333,24 @@
 						//OpenJsCad.log("armLimitRadius: " + cutoutRadius);
 						
 						if (this.centerHoleDiameter > 0) {
-							var centerHoleLimitRadius = (this.rootRadius - this.centerHoleDiameter / 2) / 2 - this.webThickness;
+							var centerHoleLimitRadius = this.rootRadius / 2 - this.centerHoleDiameter / 4 - this.webThickness;
 							//OpenJsCad.log("centerHoleLimitRadius: " + centerHoleLimitRadius);
 							cutoutRadius = Math.min(cutoutRadius, centerHoleLimitRadius);
 						}
 						OpenJsCad.log("cutoutDiameter: " + cutoutRadius * 2);
 
 						if (cutoutRadius > 0) {
-							var cutoutCenter = this.rootRadius + cutoutRadius * (this.cutoutHoleLocation - 2) - this.webThickness; // TODO Fix for small cutouts
+							var cutoutCenter = this.rootRadius - cutoutRadius - this.webThickness;
+							if (this.cutoutHoleLocation < 1) {
+								var minCutoutCenter = (cutoutRadius + this.webThickness / 2) / sin;
+								//OpenJsCad.log("minCutoutCenter: " + minCutoutCenter);
+								cutoutCenter = minCutoutCenter + (cutoutCenter - minCutoutCenter) * this.cutoutHoleLocation;
+								if (this.centerHoleDiameter > 0) {
+									var centerHoleLimitCenter = this.centerHoleDiameter / 2 + this.webThickness + cutoutRadius;
+									//OpenJsCad.log("centerHoleLimitCenter: " + centerHoleLimitCenter);
+									cutoutCenter = Math.max(cutoutCenter, centerHoleLimitCenter);
+								}
+							}
 							OpenJsCad.log("cutoutCenter: " + cutoutCenter);
 						
 							for (var i = 0; i < this.cutoutHoleCount; i++) {
