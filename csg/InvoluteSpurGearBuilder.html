@@ -158,20 +158,20 @@
 					{ name: 'pressureAngle', caption: 'Pressure Angle (common values are 14.5, 20 and 25 degrees):', type: 'float', initial: 20 },
 					{ name: 'clearance', caption: 'Clearance (minimal distance between the apex of a tooth and the trough of the other gear; in length units):', type: 'float', initial: 0.05 },
 					{ name: 'backlash', caption: 'Backlash (minimal distance between meshing gears; in length units):', type: 'float', initial: 0.05 },
-					{ name: 'wheel1ToothCount', caption: 'Wheel 1 Tooth Count (n1 > 0: external gear; n1 = 0: rack; n1 < 0: internal gear):', type: 'int', initial: 30 },
+					{ name: 'wheel1ToothCount', caption: 'Wheel 1 Tooth Count (n > 0: external gear; n = 0: rack; n < 0: internal gear):', type: 'int', initial: 30 },
 					{ name: 'wheel1ToothLength', caption: 'Wheel 1 Tooth Length (compared to the standard addendum length E.g., a value of 0.8 would be typical stub teeth to avoid undercutting the other wheel. E.g., to obtain a profile shift set the other wheel so that they average 1):', type: 'float', initial: 1 },
-					{ name: 'wheel1CenterHoleDiameter', caption: 'Wheel 1 Center Hole Diameter (0 for no hole):', type: 'float', initial: 4 },
+					{ name: 'wheel1CenterHoleDiameter', caption: 'Wheel 1 Center Hole Diameter (0 for no hole):', type: 'float', initial: 5 },
 					{ name: 'wheel1CutoutHoleCount', caption: 'Wheel 1 Cutout Hole Count (0 for no holes):', type: 'int', initial: 4 },
 					{ name: 'wheel1CutoutHoleSize', caption: 'Wheel 1 Cutout Hole Size (size of the cutout compared to its maximum):', type: 'float', initial: 1 },
-					{ name: 'wheel1CutoutHoleLocation', caption: 'Wheel 1 Cutout Hole Location (1 being as close to the rim as possible, 0 being close to the center):', type: 'float', initial: 1 },
-					{ name: 'wheel1CutoutCornerDiameter', caption: 'Wheel 1 Cutout Corner Diameter (minimal diameter of internal corners; in length units):', type: 'float', initial: 1 },
+					{ name: 'wheel1CutoutHoleLocation', caption: 'Wheel 1 Cutout Hole Location (-1 < n < 0: near the center; n = 0: as close to the center as posible without trimming; 0 < n < 1: between the rim and center; n = 1: on the rim; 1 < n < 2: beyond the rim):', type: 'float', initial: 1 },
+					{ name: 'wheel1CutoutCornerDiameter', caption: 'Wheel 1 Cutout Corner Diameter (minimal diameter of internal corners; in length units):', type: 'float', initial: 0 },
 					{ name: 'wheel1RimThickness', caption: 'Wheel 1 Rim Thickness (minimum thickness compared to the tooth width):', type: 'float', initial: 1 },
 					{ name: 'wheel1WebThickness', caption: 'Wheel 1 Web Thickness (minimum distance between cutouts compared to the tooth width):', type: 'float', initial: 1 },
 					{ name: 'wheel1ArmThickness', caption: 'Wheel 1 Arm Thickness (minimum width compared to the tooth width):', type: 'float', initial: 1 },
 					{ name: 'wheel1CenterThickness', caption: 'Wheel 1 Center Thickness (minimum thickness around the center hole compared to the tooth width):', type: 'float', initial: 1 },
 					{ name: 'wheel2ToothCount', caption: 'Wheel 2 Tooth Count:', type: 'int', initial: 8 },
 					{ name: 'wheel2ToothLength', caption: 'Wheel 2 Tooth Length:', type: 'float', initial: 1 },
-					{ name: 'wheel2CenterHoleDiameter', caption: 'Wheel 2 Center Hole Diameter:', type: 'float', initial: 4 },
+					{ name: 'wheel2CenterHoleDiameter', caption: 'Wheel 2 Center Hole Diameter:', type: 'float', initial: 5 },
 					{ name: 'wheel2CutoutHoleCount', caption: 'Wheel 2 Cutout Hole Count:', type: 'int', initial: 0 },
 					{ name: 'wheel2CutoutHoleSize', caption: 'Wheel 2 Cutout Hole Size:', type: 'float', initial: 1 },
 					{ name: 'wheel2CutoutHoleLocation', caption: 'Wheel 2 Cutout Hole Location:', type: 'float', initial: 1 },
@@ -261,7 +261,7 @@
 					if (this.cutoutHoleCount > 1) {
 						this.cutoutHoleSize = options.cutoutHoleSize == null ? 1 : options.cutoutHoleSize;			
 						this.cutoutHoleLocation = options.cutoutHoleLocation == null ? 1 : options.cutoutHoleLocation; // Zero cutout hole location is as close to the center as possible whilst maintaining web thickness
-						this.cutoutCornerDiameter = options.cutoutCornerDiameter || 0;
+						this.cutoutCornerRadius = (options.cutoutCornerDiameter || 0) / 2;
 						this.webThickness = this.toothWidth * (options.webThickness || 1);
 						//OpenJsCad.log("webThickness: " + this.webThickness);
 						this.armThickness = this.toothWidth * (options.armThickness || 1);
@@ -284,7 +284,8 @@
 					// return the gear shape center on the origin and rotation angle 0.
 					if (this.zeroedShape == null) {
 						this.zeroedShape = this._createZeroedShape();
-						OpenJsCad.log("area: " + this.zeroedShape.area());
+						OpenJsCad.log("gearArea: " + this.zeroedShape.area());
+						//OpenJsCad.log("sides: " + this.zeroedShape.sides.length);
 					}
 					return this.zeroedShape;
 				}
@@ -323,7 +324,6 @@
 					}				
 					var outerPoints = [];
 					var outerCorners = [];
-					var outterPointsCount = corners.length - 2;
 					for(var i = 1; i < corners.length - 1; i++) {
 						var corner = corners[(i + centerCornerIndex) % corners.length];
 						outerCorners.push(corner);
@@ -346,7 +346,7 @@
 						gearShape = gearShape.subtract(this._createRegularGearCutouts());
 					}
 					
-					if (this.centerThickness > 0) {
+					if (this.centerHoleRadius > 0) {
 						var centerHole = CAG.circle({center: [0, 0], radius: this.centerHoleRadius, resolution: this.qualitySettings.resolution});
 						gearShape = gearShape.subtract(centerHole);
 					}
@@ -355,6 +355,7 @@
 				}
 				
 				Gear.prototype._createRegularGearCutouts = function() {
+					// Calculate main circle cutout size
 					var sin = Math.sin(Math.PI / this.cutoutHoleCount);
 					var size;
 					if (this.cutoutHoleCount == 2) {
@@ -367,7 +368,7 @@
 
 					var cutoutRadius = (this.rootRadius - this.rimThickness + this.webThickness / 2) * size - this.webThickness / 2;
 					//OpenJsCad.log("armLimitRadius: " + cutoutRadius);
-					if (this.centerThickness > 0) {
+					if (this.centerThickness) {
 						var centerHoleLimitRadius = (this.rootRadius - this.centerHoleRadius - this.centerThickness - this.rimThickness) / 2;
 						//OpenJsCad.log("centerHoleLimitRadius: " + centerHoleLimitRadius);
 						cutoutRadius = Math.min(cutoutRadius, centerHoleLimitRadius);
@@ -375,47 +376,116 @@
 					cutoutRadius = cutoutRadius  * this.cutoutHoleSize;
 					OpenJsCad.log("cutoutDiameter: " + cutoutRadius * 2);
 
+					// Calculate main circle cutout location
+					var cutoutCenter = 0;
 					if (cutoutRadius > 0) {
-						var cutoutCenter = this.rootRadius - cutoutRadius - this.rimThickness;
-						if (this.cutoutHoleLocation < 1) {
-							var minCutoutCenter = (cutoutRadius + this.webThickness / 2) / sin;
-							//OpenJsCad.log("minCutoutCenter: " + minCutoutCenter);
-							if (this.centerThickness > 0) {
-								var centerHoleLimitCenter = this.centerHoleRadius + this.centerThickness + cutoutRadius;
-								//OpenJsCad.log("centerHoleLimitCenter: " + centerHoleLimitCenter);
-								minCutoutCenter = Math.max(minCutoutCenter, centerHoleLimitCenter);
-							}
-							cutoutCenter = minCutoutCenter + (cutoutCenter - minCutoutCenter) * this.cutoutHoleLocation;
+						var centerCutoutCenter = (cutoutRadius + this.webThickness / 2) / sin;
+						//OpenJsCad.log("centerCutoutCenter: " + centerCutoutCenter);
+						if (this.centerThickness) {
+							var centerHoleLimitCenter = this.centerHoleRadius + this.centerThickness + cutoutRadius;
+							//OpenJsCad.log("centerHoleLimitCenter: " + centerHoleLimitCenter);
+							centerCutoutCenter = Math.max(centerCutoutCenter, centerHoleLimitCenter);
 						}
+						var rimCutoutCenter = this.rootRadius - this.rimThickness - cutoutRadius;
+						//OpenJsCad.log("rimCutoutCenter: " + rimCutoutCenter);
+
+						var min = this.armThickness / 2 / sin - cutoutRadius;
+						var max = 0;
+						var location = 0;
+						if (-1 < this.cutoutHoleLocation && this.cutoutHoleLocation < 0) { // Near the center
+							if (this.centerThickness) {
+								min = this.centerHoleRadius + this.centerThickness - cutoutRadius;
+							}
+							max = centerCutoutCenter;
+							location = this.cutoutHoleLocation + 1;
+						}
+						else if (0 <= this.cutoutHoleLocation && this.cutoutHoleLocation <= 1) { // In the gear
+							min = centerCutoutCenter;
+							max = rimCutoutCenter
+							location = this.cutoutHoleLocation;
+						}
+						else if (1 < this.cutoutHoleLocation && this.cutoutHoleLocation < 2) { // Beyond the rim
+							min = rimCutoutCenter;
+							max = rimCutoutCenter + 2 * cutoutRadius;
+							location = this.cutoutHoleLocation - 1;
+						}
+						else { // Outside the gear
+							cutoutRadius = 0;
+						}
+						//OpenJsCad.log("min: " + min);
+						//OpenJsCad.log("max: " + max);
+						//OpenJsCad.log("location: " + location);
+						cutoutCenter = min + (max - min) * location;
 						OpenJsCad.log("cutoutCenter: " + cutoutCenter);
 					}
-					var cutouts = new CAG();
-					var cutoutWebs = new CAG();
-					var cutoutArms = new CAG();
-					var cutout;
+					
+					// Create sector covering one cutout
 					var angleCutoutToCutout = 360 / this.cutoutHoleCount;
+					var path = CSG.Path2D.arc({
+						center: [0, 0],
+						radius: this.rootRadius - this.rimThickness - this.cutoutCornerRadius,
+						startangle: angleCutoutToCutout / 2,
+						endangle: -angleCutoutToCutout / 2,
+						resolution: this.qualitySettings.resolution
+					});
+					if (this.centerThickness) {
+						var centerHole = CSG.Path2D.arc({
+							center: [0, 0],
+							radius: this.centerHoleRadius + this.centerThickness + this.cutoutCornerRadius,
+							startangle: -angleCutoutToCutout / 2,
+							endangle: angleCutoutToCutout / 2,
+							resolution: this.qualitySettings.resolution
+						});
+						path = path.appendPoints(centerHole.points);
+					}
+					else {
+						path = path.appendPoint([0, 0]);
+					}
+					path = path.close();
+					var cutoutSector = path.innerToCAG();
+					//OpenJsCad.log("cutoutSectorArea: " + cutoutSector.area());
+
+					// Create cutouts
+					var cutouts = new CAG(); // Main circle cutouts
+					var cutoutWebs = new CAG(); // Webbing between circle cutouts and residual cutouts
+					var cutoutArms = new CAG(); // Arms connecting circle cutouts to center and rim
+
+					// TODO More efficient (especially for the expand) to fully calculate a single set of cutouts and then rotate
 					for (var i = 0; i < this.cutoutHoleCount; i++) {
-						if (cutoutRadius > 0) {
-							cutout = CAG.circle({center: [cutoutCenter, 0], radius: cutoutRadius, resolution: this.qualitySettings.resolution});
-							cutouts = cutouts.union(cutout).rotateZ(angleCutoutToCutout);
-							cutout = CAG.circle({center: [cutoutCenter, 0], radius: cutoutRadius + this.webThickness + this.cutoutCornerDiameter, resolution: this.qualitySettings.resolution});
-							cutoutWebs = cutoutWebs.union(cutout).rotateZ(angleCutoutToCutout);
+						var cutoutWeb = cutoutSector;
+						if (cutoutRadius) {
+							cutout = CAG.circle({center: [cutoutCenter, 0], radius: cutoutRadius - this.cutoutCornerRadius, resolution: this.qualitySettings.resolution});
+							cutout = cutoutSector.intersect(cutout);
+							if (cutout.sides.length) { // Due to the cutout corner radius there may not actually be any cutout
+								cutouts = cutouts.union(cutout).rotateZ(angleCutoutToCutout);
+								
+								cutout = CAG.circle({center: [cutoutCenter, 0], radius: cutoutRadius + this.webThickness + this.cutoutCornerRadius, resolution: this.qualitySettings.resolution});
+								cutoutWeb = cutoutSector.subtract(cutout);
+							}
+							
 						}
-						cutout = CAG.rectangle({center: [0, this.rootRadius / 2], radius: [this.armThickness / 2 + this.cutoutCornerDiameter, this.rootRadius / 2]});
+						cutoutWebs = cutoutWebs.union(cutoutWeb).rotateZ(angleCutoutToCutout);
+						
+						cutout = CAG.rectangle({center: [this.rootRadius / 2, 0], radius: [this.rootRadius / 2, this.armThickness / 2 + this.cutoutCornerRadius]});
 						cutoutArms = cutoutArms.union(cutout).rotateZ(angleCutoutToCutout);
 					}
 					
-					cutout = CAG.circle({center: [0, 0], radius: this.rootRadius - this.rimThickness - this.cutoutCornerDiameter, resolution: this.qualitySettings.resolution});
-					if (this.centerThickness > 0) {
-						var centerHole = CAG.circle({center: [0, 0], radius: this.centerHoleRadius + this.centerThickness + this.cutoutCornerDiameter, resolution: this.qualitySettings.resolution});
-						cutout = cutout.subtract(centerHole);
+					// Add webbing and arms to main cutouts
+					//OpenJsCad.log("cutoutArmsArea: " + cutoutArms.area());
+					//OpenJsCad.log("primaryCutoutsArea: " + cutouts.area());					
+					if (cutouts.sides.length) { // Cannot subtract from an empty area as it results in a negated union - is this a CSG bug?
+						cutouts = cutouts.subtract(cutoutArms.rotateZ(angleCutoutToCutout / 2));
 					}
-					
-					cutout = cutout.subtract(cutoutWebs).subtract(cutoutArms.rotateZ(-90));
-					if (this.cutoutCornerDiameter > 0) {
-						cutout = cutout.expand(this.cutoutCornerDiameter, this.qualitySettings.resolution);
+					//OpenJsCad.log("cutoutWebs: " + cutoutWebs.area());
+					if (cutoutWebs.sides.length) { // Cannot subtract from an empty area as it results in a negated union - is this a CSG bug?
+						cutoutWebs = cutoutWebs.subtract(cutoutArms);
 					}
-					return cutouts.union(cutout);
+					cutouts = cutouts.union(cutoutWebs);
+					if (this.cutoutCornerRadius > 0) { // Round sharp corners
+						cutouts = cutouts.expand(this.cutoutCornerRadius, this.qualitySettings.resolution);
+					}
+					OpenJsCad.log("cutoutsArea: " + cutouts.area());
+					return cutouts;
 				}
 				
 				Gear.prototype._createSingleTooth = function() {
